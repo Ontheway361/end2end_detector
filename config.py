@@ -17,23 +17,20 @@ def training_args():
     parser.add_argument('--workers',  type=int,  default=0)
 
     # --dataset
-    parser.add_argument('--train_file', type=str, default=osp.join(data_dir, 'akuface_train_1115.txt'))
-    parser.add_argument('--eval_file',  type=str, default=osp.join(data_dir, 'akuface_test_1115.txt'))
-    parser.add_argument('--in_size',    type=int, default=224)
-    parser.add_argument('--batchsize',  type=int, default=32)   # default=256
+    parser.add_argument('--train_file', type=str, default=osp.join(data_dir, 'end2end_train_1129.txt'))
+    parser.add_argument('--eval_file',  type=str, default=osp.join(data_dir, 'end2end_test_1129.txt'))
+    parser.add_argument('--in_size',    type=int, default=112)   # default=224
+    parser.add_argument('--batchsize',  type=int, default=128)   # default=256
 
     ##  -- optimizer
     parser.add_argument('--base_lr',       type=float, default=1e-3)
     parser.add_argument('--gamma',         type=float, default=0.5)
     parser.add_argument('--weight_decay',  type=float, default=5e-4)
 
-    # -- lr
-    parser.add_argument("--lr_patience", type=int, default=40)
-
     # -- epoch
     parser.add_argument('--start_epoch', type=int, default=1)
     parser.add_argument('--end_epoch',   type=int, default=30)
-    parser.add_argument('--print_freq',  type=int, default=100)
+    parser.add_argument('--print_freq',  type=int, default=200)
 
     # -- snapshot
     parser.add_argument('--save_freq',type=int, default=5)

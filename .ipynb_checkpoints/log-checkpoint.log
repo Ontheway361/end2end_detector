@@ -1,0 +1,27 @@
+----------------Environment Versions----------------
+- Python: 3.7.3 
+- PyTorch: 1.1.0
+- TorchVison: 0.3.0
+- device: True
+----------------------------------------------------
+Traceback (most recent call last):
+  File "train.py", line 200, in <module>
+    occdetector.train_runner()
+  File "train.py", line 190, in train_runner
+    self._model_loader()
+  File "train.py", line 45, in _model_loader
+    self.model['backbone'] = MobileNetV2(num_classes=2).cuda()
+  File "/opt/conda/lib/python3.7/site-packages/torch/nn/modules/module.py", line 265, in cuda
+    return self._apply(lambda t: t.cuda(device))
+  File "/opt/conda/lib/python3.7/site-packages/torch/nn/modules/module.py", line 193, in _apply
+    module._apply(fn)
+  File "/opt/conda/lib/python3.7/site-packages/torch/nn/modules/module.py", line 193, in _apply
+    module._apply(fn)
+  File "/opt/conda/lib/python3.7/site-packages/torch/nn/modules/module.py", line 193, in _apply
+    module._apply(fn)
+  [Previous line repeated 2 more times]
+  File "/opt/conda/lib/python3.7/site-packages/torch/nn/modules/module.py", line 199, in _apply
+    param.data = fn(param.data)
+  File "/opt/conda/lib/python3.7/site-packages/torch/nn/modules/module.py", line 265, in <lambda>
+    return self._apply(lambda t: t.cuda(device))
+RuntimeError: CUDA out of memory. Tried to allocate 2.00 MiB (GPU 0; 10.91 GiB total capacity; 5.28 MiB already allocated; 8.50 MiB free; 738.50 KiB cached)

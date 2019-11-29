@@ -1,0 +1,45 @@
+----------------Environment Versions----------------
+- Python: 3.7.3 
+- PyTorch: 1.1.0
+- TorchVison: 0.3.0
+- device: True
+----------------------------------------------------
+Parallel mode was going ...
+Model loading was finished ...
+Data loading was finished ...
+cur_epoch : 200| 1|30, loss : 0.2778
+cur_epoch : 400| 1|30, loss : 0.2519
+cur_epoch : 600| 1|30, loss : 0.2394
+cur_epoch : 800| 1|30, loss : 0.2307
+cur_epoch : 1000| 1|30, loss : 0.2263
+              precision    recall  f1-score   support
+
+           0     0.9162    0.8744    0.8948     62023
+           1     0.9148    0.9440    0.9292     88673
+
+    accuracy                         0.9154    150696
+   macro avg     0.9155    0.9092    0.9120    150696
+weighted avg     0.9154    0.9154    0.9150    150696
+
+[[54231  7792]
+ [ 4962 83711]]
+Single epoch cost time : 35.74 mins
+/opt/conda/lib/python3.7/site-packages/sklearn/metrics/classification.py:1437: UndefinedMetricWarning: F-score is ill-defined and being set to 0.0 due to no predicted samples.
+  'precision', 'predicted', average, warn_for)
+/opt/conda/lib/python3.7/site-packages/sklearn/metrics/classification.py:1437: UndefinedMetricWarning: Precision is ill-defined and being set to 0.0 due to no predicted samples.
+  'precision', 'predicted', average, warn_for)
+/opt/conda/lib/python3.7/site-packages/sklearn/metrics/classification.py:1437: UndefinedMetricWarning: Precision and F-score are ill-defined and being set to 0.0 in labels with no predicted samples.
+  'precision', 'predicted', average, warn_for)
+              precision    recall  f1-score   support
+
+           0     0.4135    1.0000    0.5850      4104
+           1     0.0000    0.0000    0.0000      5822
+
+    accuracy                         0.4135      9926
+   macro avg     0.2067    0.5000    0.2925      9926
+weighted avg     0.1709    0.4135    0.2419      9926
+
+[[4104    0]
+ [5822    0]]
+eval_loss : 4.3257
+cur_epoch : 200| 2|30, loss : 0.1979

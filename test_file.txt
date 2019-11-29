@@ -1,8 +1,0 @@
-test_img/20195944_0.jpg 1
-test_img/20195944_1.jpg 1
-test_img/20195944_2.jpg 1
-test_img/20195944_3.jpg 1
-test_img/20195944_4.jpg 1
-test_img/20195944_5.jpg 1
-test_img/20195944_6.jpg 1
-test_img/20195944_7.jpg 1

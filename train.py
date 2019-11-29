@@ -11,7 +11,7 @@ from sklearn import metrics
 from torch.utils.data import DataLoader
 
 from config import training_args
-from detect_lib import MobileNetV2, AkuDataset
+from classifier_lib import MobileNetV2, AkuDataset
 
 from IPython import embed
 
@@ -167,7 +167,7 @@ class OccDetetor(object):
             val_loss   = self._model_eval()
             if val_loss < min_loss:
                 min_loss = val_loss
-                filename = os.path.join('checkpoint', 'sota.pth.tar')
+                filename = os.path.join(self.args.snapshot, 'sota.pth.tar')
                 torch.save({
                     'epoch'   : epoch,
                     'backbone': self.model['backbone'].state_dict(),
@@ -175,7 +175,7 @@ class OccDetetor(object):
                 }, filename)
 
             if (epoch + 1) % self.args.save_freq == 0:
-                filename = os.path.join('checkpoint', 'checkpoint_epoch_'+str(epoch)+'.pth.tar')
+                filename = os.path.join(self.args.snapshot, 'checkpoint_epoch_'+str(epoch)+'.pth.tar')
                 torch.save({
                     'epoch'   : epoch,
                     'backbone': self.model['backbone'].state_dict(),
