@@ -449,3 +449,17 @@ weighted avg     0.9045    0.9046    0.9045      5030
 [[1862  252]
  [ 228 2688]]
 eval_loss : 0.2528
+
+
+conclusion: sota as 7th epoch, eval_loss : 0.2221
+              precision    recall  f1-score   support
+
+           0     0.9047    0.8846    0.8945      2114
+           1     0.9177    0.9324    0.9250      2916
+
+    accuracy                         0.9123      5030
+   macro avg     0.9112    0.9085    0.9098      5030
+weighted avg     0.9122    0.9123    0.9122      5030
+
+[[1870  244]
+ [ 197 2719]]

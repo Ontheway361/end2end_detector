@@ -11,7 +11,7 @@ from sklearn import metrics
 from torch.utils.data import DataLoader
 
 from config import training_args
-from classifier_lib import MobileNetV2, AkuDataset
+from classifier_lib import MobileNetV2, AkuDataset, resnet34
 
 from IPython import embed
 
@@ -42,9 +42,14 @@ class OccDetetor(object):
     def _model_loader(self):
 
         if self.device:
-            self.model['backbone'] = MobileNetV2(num_classes=2).cuda()
+            self.model['backbone'] = resnet34(num_classes=2).cuda()
+            # self.model['backbone'] = MobileNetV2(num_classes=2).cuda()
+            # self.model['backbone'] = torchvision.models.AlexNet(num_classes=2).cuda()
         else:
-            self.model['backbone'] = MobileNetV2(num_classes=2)
+            self.model['backbone'] = resnet34(num_classes=2)
+            # self.model['backbone'] = MobileNetV2(num_classes=2)
+            # self.model['backbone'] = torchvision.models.AlexNet(num_classes=2)
+           
         # self.model['criterion'] = torch.nn.BCELoss()
         self.model['criterion'] = torch.nn.CrossEntropyLoss()
         self.model['optimizer'] = torch.optim.Adam(
@@ -85,7 +90,7 @@ class OccDetetor(object):
         print('Data loading was finished ...')
 
 
-    def _calculate_acc(self, gt_label, pred_score):
+    def _calculate_acc(self, gt_label, pred_score, verbose = False):
         
         pred_score = self.softmax(torch.from_numpy(np.array(pred_score)))
         pred_label = pred_score.argmax(dim=1).numpy().tolist()
@@ -94,8 +99,9 @@ class OccDetetor(object):
         recall     = metrics.recall_score(gt_label, pred_label)
         f1_score   = metrics.f1_score(gt_label, pred_label)
         precision  = metrics.precision_score(gt_label, pred_label)
-        print(metrics.classification_report(gt_label, pred_label, digits=4))
-        print(metrics.confusion_matrix(gt_label, pred_label))
+        if verbose:
+            print(metrics.classification_report(gt_label, pred_label, digits=4))
+            print(metrics.confusion_matrix(gt_label, pred_label))
         return precision, recall
 
 
@@ -105,7 +111,7 @@ class OccDetetor(object):
 
         loss_recorder = []
         gt_label_list, pred_label_list = [], []
-        for idx, (img, gt_label) in enumerate(self.data['train_loader']):
+        for idx, (img, gt_label, _) in enumerate(self.data['train_loader']):
 
             img.requires_grad      = False
             gt_label.requires_grad = False
@@ -122,11 +128,12 @@ class OccDetetor(object):
             gt_label_list.extend(gt_label.cpu().detach().numpy().tolist())
             pred_label_list.extend(score.cpu().detach().numpy().tolist())
             if (idx + 1) % self.args.print_freq == 0:
-                ave_loss = np.mean(loss_recorder)
-                print('cur_epoch : %3d|%2d|%2d, loss : %.4f' % \
-                      (idx+1, epoch, self.args.end_epoch, ave_loss))
-        self._calculate_acc(gt_label_list, pred_label_list)
-        return ave_loss
+                print('epoch : %2d|%2d, iter : %3d|%3d,  loss : %.4f' % \
+                      (epoch, self.args.end_epoch, idx+1, len(self.data['train_loader']), np.mean(loss_recorder)))
+        precision, recall = self._calculate_acc(gt_label_list, pred_label_list, False)
+        train_loss = np.mean(loss_recorder)
+        print('train_loss : %.4f, precision : %.4f, recall : %.4f' % (train_loss, precision, recall))
+        return (train_loss, precision, recall)
 
 
     def _model_eval(self):
@@ -135,7 +142,7 @@ class OccDetetor(object):
         losses = []
         with torch.no_grad():
             gt_label_list, pred_label_list = [], []
-            for idx, (img, gt_label) in enumerate(self.data['eval_loader']):
+            for idx, (img, gt_label, _) in enumerate(self.data['eval_loader']):
 
                 img.requires_grad      = False
                 gt_label.requires_grad = False
@@ -149,9 +156,9 @@ class OccDetetor(object):
                 gt_label_list.extend(gt_label.cpu().detach().numpy().tolist())
                 pred_label_list.extend(score.cpu().detach().numpy().tolist())
             eval_loss = np.mean(losses)
-            self._calculate_acc(gt_label_list, pred_label_list)
+            precision, recall = self._calculate_acc(gt_label_list, pred_label_list, verbose=True)
             print('eval_loss : %.4f' % eval_loss)
-        return eval_loss
+        return (eval_loss, precision, recall)
 
 
     def _main_loop(self):
@@ -160,12 +167,14 @@ class OccDetetor(object):
         for epoch in range(self.args.start_epoch, self.args.end_epoch + 1):
             
             start_time = time.time()
-            train_loss = self._model_train(epoch)
+            train_loss, _, _ = self._model_train(epoch)
+            self.model['scheduler'].step()
+            val_loss, _, _ = self._model_eval()
             end_time   = time.time()
             print('Single epoch cost time : %.2f mins' % ((end_time - start_time)/60))
-            self.model['scheduler'].step()
-            val_loss   = self._model_eval()
+            
             if val_loss < min_loss:
+                print('%snew sota was found%s' % ('-'*16, '-'*16))
                 min_loss = val_loss
                 filename = os.path.join(self.args.snapshot, 'sota.pth.tar')
                 torch.save({
