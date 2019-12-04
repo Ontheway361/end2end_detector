@@ -2,16 +2,19 @@
 #-*- coding:utf-8 -*-
 
 import os
+import cv2
 import sys
 import time
 import torch
+import shutil
 import numpy as np
 import torchvision
 from sklearn import metrics
 from torch.utils.data import DataLoader
 
 import detect_lib as lib
-from config import training_args
+from config import infer_args
+
 
 from IPython import embed
 
@@ -40,7 +43,7 @@ class AnomalyDetetor(object):
 
 
     def _model_loader(self):
-        
+
         if self.args.backbone == 'mobilenet':
             self.model['backbone'] = lib.MobileNetV2(self.args.num_classes)
         elif self.args.backbone == 'resnet34':
@@ -51,16 +54,6 @@ class AnomalyDetetor(object):
             raise TypeError('unknow backbone, please check out!')
         if self.device:
             self.model['backbone'] = self.model['backbone'].cuda()
-           
-        # self.model['criterion'] = torch.nn.BCELoss()
-        # self.model['criterion'] = torch.nn.CrossEntropyLoss()
-        self.model['criterion'] = lib.AnomalyLoss(weights=self.args.weights)
-        self.model['optimizer'] = torch.optim.Adam(
-                                      [{'params': self.model['backbone'].parameters()}],
-                                      lr=self.args.base_lr,
-                                      weight_decay=self.args.weight_decay)
-        self.model['scheduler'] = torch.optim.lr_scheduler.MultiStepLR(
-                                      self.model['optimizer'], milestones=[10, 15], gamma=self.args.gamma)
 
         if self.device and len(self.args.gpu_ids) > 1:
             self.model['backbone'] = torch.nn.DataParallel(self.model['backbone'], device_ids=self.args.gpu_ids)
@@ -70,26 +63,23 @@ class AnomalyDetetor(object):
             print('Single-gpu mode was going ...')
         else:
             print('CPU mode was going ...')
-
+        
         if len(self.args.resume) > 2:
             checkpoint = torch.load(self.args.resume, map_location=lambda storage, loc: storage)
             self.args.start_epoch = checkpoint['epoch']
             self.model['backbone'].load_state_dict(checkpoint['backbone'])
-            print('Resuming the train process at %3d epoches ...' % self.args.start_epoch)
+            #self.model['backbone'].load_state_dict(checkpoint)
+            print('Resuming the train process at %d epoches ...' % self.args.start_epoch)
         print('Model loading was finished ...')
 
 
     def _data_loader(self):
 
-        self.data['train_loader'] = DataLoader(lib.AkuDataset(self.args.train_file, self.args.in_size, True),
-                                        batch_size=self.args.batchsize,
-                                        shuffle=True,
-                                        num_workers=self.args.workers,
-                                        drop_last=False)
-        self.data['eval_loader']  = DataLoader(lib.AkuDataset(self.args.eval_file, self.args.in_size, False),
-                                        batch_size=self.args.batchsize,
-                                        shuffle=False,
-                                        num_workers=self.args.workers)
+        self.transform = torchvision.transforms.Compose([
+                             torchvision.transforms.ToTensor(),
+                             torchvision.transforms.Normalize(mean=[0.5, 0.5, 0.5], \
+                                                              std=[0.5, 0.5, 0.5]),
+                         ])
         print('Data loading was finished ...')
 
 
@@ -103,6 +93,7 @@ class AnomalyDetetor(object):
         hos_label = hos_prob.argmax(dim=1).numpy()
         pred_info = ((occ_label == 1) & (hos_label == 0)) * 1
         
+        print('There are %3d gt_pos, %3d pred_pos' % (sum(gt_img), sum(pred_info)))
         # auc        = metrics.roc_auc_score(gt_label, pred_label)
         acc        = metrics.accuracy_score(gt_img, pred_info)
         recall     = metrics.recall_score(gt_img, pred_info)
@@ -119,44 +110,7 @@ class AnomalyDetetor(object):
             print(metrics.classification_report(gt_hos, hos_label, digits=4))
             print(metrics.confusion_matrix(gt_hos, hos_label))
             print('-' * 85)
-        return f1_score
         
-        
-    def _model_train(self, epoch = 0):
-
-        self.model['backbone'].train()
-
-        loss_recorder = []
-        gt_occ, gt_hos, gt_img, pred_score = [], [], [], []
-        for idx, (img, gt_label, _) in enumerate(self.data['train_loader']):
-
-            img.requires_grad         = False
-            gt_label[0].requires_grad = False  # occ_label
-            gt_label[1].requires_grad = False  # hos_label
-            gt_label[2].requires_grad = False  # img_label
-            
-            if self.device:
-                img = img.cuda()
-                gt_label[0] = gt_label[0].cuda()
-                gt_label[1] = gt_label[1].cuda()
-                gt_label[2] = gt_label[2].cuda()
-                
-            score = self.model['backbone'](img)
-            loss = self.model['criterion'](score, gt_label)
-            self.model['optimizer'].zero_grad()
-            loss.backward()
-            self.model['optimizer'].step()
-            loss_recorder.append(loss.item())
-            gt_occ.extend(gt_label[0].cpu().detach().numpy().tolist())
-            gt_hos.extend(gt_label[1].cpu().detach().numpy().tolist())
-            gt_img.extend(gt_label[2].cpu().detach().numpy().tolist())
-            pred_score.extend(score.cpu().detach().numpy().tolist())
-            if (idx + 1) % self.args.print_freq == 0:
-                print('epoch : %2d|%2d, iter : %3d|%3d,  loss : %.4f' % \
-                      (epoch, self.args.end_epoch, idx+1, len(self.data['train_loader']), np.mean(loss_recorder)))
-        self._calculate_acc(gt_occ, gt_hos, gt_img, pred_score, False)
-        train_loss = np.mean(loss_recorder)
-        print('train_loss : %.4f' % train_loss)
 
 
     def _model_eval(self):
@@ -186,48 +140,103 @@ class AnomalyDetetor(object):
                 gt_img.extend(gt_label[2].cpu().detach().numpy().tolist())
                 pred_score.extend(score.cpu().detach().numpy().tolist())
             eval_loss = np.mean(losses)
+            self._calculate_acc(gt_occ, gt_hos, gt_img, pred_score, verbose=True)
             print('eval_loss : %.4f' % eval_loss)
-            f1_score = self._calculate_acc(gt_occ, gt_hos, gt_img, pred_score, verbose=True)
+        return eval_loss
+
+
+    def _model_infer(self):
+
+        self.model['backbone'].eval()
+        with torch.no_grad():
             
-        return eval_loss, f1_score
+            # inference
+            pred_score_list, img_path_list = [], []
+            for idx, (img, _, img_path) in enumerate(self.data['eval_loader']):
+
+                img.requires_grad      = False
+                if self.device:
+                    img = img.cuda()
+                score = self.model['backbone'](img)
+                img_path_list.extend(img_path)
+                pred_score_list.extend(score.cpu().detach().numpy().tolist())
+
+                if (idx + 1) % 10 == 0:
+                    print('already precessed %3d, total %3d ...' % (idx+1, len(self.data['eval_loader'])))
+                 
+            save_info = []
+            npy_score = np.array(pred_score_list)
+            occ_prob  = self.softmax(torch.from_numpy(npy_score[:, :2]))
+            hos_prob  = self.softmax(torch.from_numpy(npy_score[:, 2:]))
+            
+            occ_label = occ_prob.argmax(dim=1).numpy()
+            hos_label = hos_prob.argmax(dim=1).numpy()
+            occ_prob  = occ_prob.numpy()[:,1]
+            # pred_info = ((occ_label == 1) & (hos_label == 0)) * 1
+            
+            # predict or analysis
+            select_data = []
+            cnt_hos = 0
+            for idx, (abs_name, occ, hos) in enumerate(zip(img_path_list, occ_prob, hos_label)):   # TODO
+                
+                # img_name  = abs_name.split('/')[-1].split('.')[0] + '_' + str(pred) + '_.jpg'
+                if hos == 0:
+                    try:
+                        img = cv2.resize(cv2.imread(abs_name), (self.args.in_size, self.args.in_size))
+                    except:
+                        continue
+                    else:
+                        if occ > 0.95:
+                            select_data.append(abs_name + ' 1\n')
+                        elif occ < 0.05:
+                            select_data.append(abs_name + ' 0\n')
+                else:
+                    cnt_hos += 1
+                    '''
+                    try:
+                        img = cv2.resize(cv2.imread(abs_name), (self.args.in_size, self.args.in_size))
+                    except:
+                        print('Errors occurs in %s' % abs_name)
+                    else:
+                        save_name = os.path.join(self.args.save_dir, img_name)
+                        if cv2.imwrite(save_name, img):
+                            cnt_hos += 1
+                    '''
+                '''
+                pred_prob = pred[1]
+                if pred_prob > 0.6:
+                    img_dir = os.path.join(self.args.save_dir, 'pos', img_name)
+                elif pred_prob < 0.4:
+                    img_dir = os.path.join(self.args.save_dir, 'neg', img_name)
+                else:
+                    img_dir = os.path.join(self.args.save_dir, 'unknow', img_name)
+                save_info.append([abs_name, pred_prob])
+                shutil.copyfile(abs_name, img_dir)
+                '''
+                
+                if (idx+1) % 1000 ==0:
+                    print('already precessed %3d images, total %3d' % (idx+1, len(img_path_list)))
+            # np.save(os.path.join(self.args.save_dir, 'infer_result.npy'), save_info)
+            with open(self.args.out_file, 'w') as f:
+                f.writelines(select_data)
+            f.close()
+            print('There are %3d hos-images among %3d images, ratio : %.4f' % \
+                  (cnt_hos, len(img_path_list), cnt_hos/len(img_path_list)))
+            print('There are %3d images selected from %3d images' % \
+                  (len(select_data), len(img_path_list)))
+            print('Inference was finished ...')
 
 
     def _main_loop(self):
 
-        min_loss = 100
-        max_f1_score = 0.0
-        for epoch in range(self.args.start_epoch, self.args.end_epoch + 1):
-            
-            start_time = time.time()
-            self._model_train(epoch)
-            self.model['scheduler'].step()
-            val_loss, f1_score = self._model_eval()
-            end_time = time.time()
-            print('Single epoch cost time : %.2f mins' % ((end_time - start_time)/60))
-            
-            if not os.path.exists(self.args.snapshot):
-                os.mkdir(self.args.snapshot)
-                
-            if (min_loss > val_loss) & (max_f1_score < f1_score):
-                print('%snew SOTA was found%s' % ('*'*16, '*'*16))
-                min_loss = val_loss
-                filename = os.path.join(self.args.snapshot, 'sota.pth.tar')
-                torch.save({
-                    'epoch'   : epoch,
-                    'backbone': self.model['backbone'].state_dict(),
-                    'f1_score': f1_score
-                }, filename)
-
-            if epoch % self.args.save_freq == 0:
-                filename = os.path.join(self.args.snapshot, 'epoch_'+str(epoch)+'.pth.tar')
-                torch.save({
-                    'epoch'   : epoch,
-                    'backbone': self.model['backbone'].state_dict(),
-                    'f1_score': f1_score
-                }, filename)
+        start_time = time.time()
+        self._model_eval()
+        # self._model_infer()
+        end_time   = time.time()
+        print('Inference cost time : %.2f mins' % ((end_time - start_time)/60))
 
 
-    def train_runner(self):
+    def runner(self):
 
         self._report_settings()
 
@@ -240,5 +249,5 @@ class AnomalyDetetor(object):
 
 if __name__ == "__main__":
 
-    anodetector = AnomalyDetetor(training_args())
-    anodetector.train_runner()
+    detector = AnomalyDetetor(infer_args())
+    detector.runner()

@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "train.py", line 237, in <module>
+    anodetector = AnomalyDetetor(training_args())
+  File "/home/jovyan/lujie/deep_learning/faceu/face_occlusion/anomaly_detection/config/train_config.py", line 26, in training_args
+    parser.add_argument('--weights',     type-list,  default=[1.0, 1.5])
+TypeError: unsupported operand type(s) for -: 'type' and 'type'
