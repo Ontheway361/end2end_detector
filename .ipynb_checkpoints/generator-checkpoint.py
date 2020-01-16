@@ -101,7 +101,7 @@ class HorizontalScreen(object):
 
 
 # root_dir = '/home/jovyan/lujie/benchmark_imgs/akuface/akuface_1115_1.2w'
-root_dir = '/home/jovyan/lujie/benchmark_imgs/akuface'
+root_dir = '/home/jovyan/lujie/end2end'
 
 
 def aug_args():
@@ -111,9 +111,9 @@ def aug_args():
     # file
     parser.add_argument('--in_size',  type=int, default=112)
     # parser.add_argument('--root_dir', type=str, default=root_dir)
-    parser.add_argument('--file',     type=str, default=os.path.join(root_dir, '5w_select.txt'))
+    parser.add_argument('--file',     type=str, default=os.path.join(root_dir, '1203_4.2w.txt'))
     parser.add_argument('--save_dir', type=str, default=os.path.join(root_dir, 'temp'))
-    parser.add_argument('--out_file', type=str, default=os.path.join(root_dir, 'akuface_anno/multitask_1203.csv'))
+    parser.add_argument('--out_file', type=str, default=os.path.join(root_dir, 'anno_file/multitask_1203.csv'))
 
     args = parser.parse_args()
     return args

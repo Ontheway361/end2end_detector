@@ -182,7 +182,7 @@ class AnomalyDetetor(object):
             pred_score_list, img_path_list = [], []
             for idx, (img, _, img_path) in enumerate(self.data['eval_loader']):
 
-                img.requires_grad      = False
+                img.requires_grad = False
                 if self.device:
                     img = img.cuda()
                 score = self.model['backbone'](img)
@@ -214,10 +214,18 @@ class AnomalyDetetor(object):
                     except:
                         continue
                     else:
+                        if occ < 0.4:
+                            img_save_path = os.path.join(self.args.save_dir, abs_name.split('/')[-1])
+                            cv2.imwrite(img_save_path, img)
+                        '''
                         if occ > 0.95:
                             select_data.append(abs_name + ' 1\n')
                         elif occ < 0.05:
                             select_data.append(abs_name + ' 0\n')
+                        else:
+                            img_save_path = os.path.join(self.args.save_dir, abs_name.split('/')[-1])
+                            cv2.imwrite(img_save_path, img)
+                        '''
                 else:
                     cnt_hos += 1
                     '''
@@ -249,11 +257,12 @@ class AnomalyDetetor(object):
             with open(self.args.out_file, 'w') as f:
                 f.writelines(select_data)
             f.close()
+            '''
             print('There are %3d hos-images among %3d images, ratio : %.4f' % \
-                  (cnt_hos, len(img_path_list), cnt_hos/len(img_path_list)))
+                  (cnt_hos, len(img_path_list), cnt_hos / len(img_path_list)))
             print('There are %3d images selected from %3d images' % \
                   (len(select_data), len(img_path_list)))
-            '''
+            
             print('Inference was finished ...')
 
 

@@ -32,16 +32,16 @@ class AnomalyDetetor(object):
 
         str = '-' * 16
         print('%sEnvironment Versions%s' % (str, str))
-        print("- Python: {}".format(sys.version.strip().split('|')[0]))
-        print("- PyTorch: {}".format(torch.__version__))
+        print("- Python    : {}".format(sys.version.strip().split('|')[0]))
+        print("- PyTorch   : {}".format(torch.__version__))
         print("- TorchVison: {}".format(torchvision.__version__))
-        print("- device: {}".format(self.device))
+        print("- GPU_device: {}".format(self.device))
         print('-'*52)
 
 
     def _model_loader(self):
         
-        if self.args.backbone == 'mobilenet':
+        if self.args.backbone   == 'mobilenet':
             self.model['backbone'] = lib.MobileNetV2(self.args.num_classes)
         elif self.args.backbone == 'resnet34':
             self.model['backbone'] = lib.resnet34(self.args.num_classes)
@@ -54,13 +54,17 @@ class AnomalyDetetor(object):
            
         # self.model['criterion'] = torch.nn.BCELoss()
         # self.model['criterion'] = torch.nn.CrossEntropyLoss()
-        self.model['criterion'] = lib.AnomalyLoss(weights=self.args.weights)
+        self.model['criterion'] = lib.AnomalyLoss(weights=self.args.weights, \
+                                                  regular=self.args.regular, \
+                                                  use_gpu=self.device)
         self.model['optimizer'] = torch.optim.Adam(
                                       [{'params': self.model['backbone'].parameters()}],
                                       lr=self.args.base_lr,
                                       weight_decay=self.args.weight_decay)
         self.model['scheduler'] = torch.optim.lr_scheduler.MultiStepLR(
-                                      self.model['optimizer'], milestones=[10, 15], gamma=self.args.gamma)
+                                      self.model['optimizer'], \
+                                      milestones=self.args.lr_steps, \
+                                      gamma=self.args.gamma)
 
         if self.device and len(self.args.gpu_ids) > 1:
             self.model['backbone'] = torch.nn.DataParallel(self.model['backbone'], device_ids=self.args.gpu_ids)
@@ -110,7 +114,6 @@ class AnomalyDetetor(object):
         precision  = metrics.precision_score(gt_img, pred_info)
         print('acc : %.4f, precision : %.4f, recall : %.4f, f1_score : %.4f' % \
               (acc, precision, recall, f1_score))
-        
         if verbose:
             print('%s gt vs. pred %s' % ('-' * 36, '-' * 36))
             print(metrics.classification_report(gt_occ, occ_label, digits=4))
@@ -154,7 +157,7 @@ class AnomalyDetetor(object):
             if (idx + 1) % self.args.print_freq == 0:
                 print('epoch : %2d|%2d, iter : %3d|%3d,  loss : %.4f' % \
                       (epoch, self.args.end_epoch, idx+1, len(self.data['train_loader']), np.mean(loss_recorder)))
-        self._calculate_acc(gt_occ, gt_hos, gt_img, pred_score, False)
+        self._calculate_acc(gt_occ, gt_hos, gt_img, pred_score, verbose=True)
         train_loss = np.mean(loss_recorder)
         print('train_loss : %.4f' % train_loss)
 
@@ -205,21 +208,23 @@ class AnomalyDetetor(object):
             end_time = time.time()
             print('Single epoch cost time : %.2f mins' % ((end_time - start_time)/60))
             
-            if not os.path.exists(self.args.snapshot):
-                os.mkdir(self.args.snapshot)
+            if not os.path.exists(self.args.save_to):
+                os.mkdir(self.args.save_to)
                 
             if (min_loss > val_loss) & (max_f1_score < f1_score):
-                print('%snew SOTA was found%s' % ('*'*16, '*'*16))
                 min_loss = val_loss
-                filename = os.path.join(self.args.snapshot, 'sota.pth.tar')
+                max_f1_score = f1_score
+                filename = os.path.join(self.args.save_to, 'sota.pth.tar')
                 torch.save({
                     'epoch'   : epoch,
                     'backbone': self.model['backbone'].state_dict(),
                     'f1_score': f1_score
                 }, filename)
+                print('%s | sota | loss : %.4f | f1_score : %.4f | %s' % \
+                      ('*'*16, min_loss, max_f1_score, '*'*16))
 
             if epoch % self.args.save_freq == 0:
-                filename = os.path.join(self.args.snapshot, 'epoch_'+str(epoch)+'.pth.tar')
+                filename = os.path.join(self.args.save_to, 'epoch_'+str(epoch)+'.pth.tar')
                 torch.save({
                     'epoch'   : epoch,
                     'backbone': self.model['backbone'].state_dict(),

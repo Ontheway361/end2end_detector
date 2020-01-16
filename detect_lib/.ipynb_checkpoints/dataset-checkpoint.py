@@ -36,18 +36,43 @@ class AkuDataset(data.Dataset):
     
     def _data_aug(self):
         
-        lines = []
+        aug_lines = []
         if self.is_aug:
             for row in self.lines:
-                if ('1 0 1\n' in row) or ('0 0 0\n' in row):
-                    aug = row[:-2] + 2 * row[-2] + '\n'
-                    lines.append(aug)
-        self.lines.extend(lines)
-        print('After data augmentation, %3d rows added.' % len(lines))
+                aug_row = row[:-2] + 2 * row[-2] + '\n'
+                aug_lines.append(aug_row)
+        self.lines.extend(aug_lines)
+        self.lines = np.random.permutation(self.lines).tolist()
+        print('After data augmentation, %3d rows added.' % len(aug_lines))
     
     
+    @staticmethod
+    def _flip_aug(img, info, style = 'swap'):
+        
+        occ, hos, anno = int(info[0]), int(info[1]), info[2]
+        if style == 'swap':
+            if hos % 2 == 0:
+                img  = cv2.flip(img, 0)  
+            else:
+                img = cv2.flip(img, 1)
+            if (hos == 2) & (occ == 1):
+                anno = 1
+            else:
+                anno = 0
+            hos = (hos + 2) % 4
+        else:
+            if hos % 2 == 0:
+                img = cv2.flip(img, 1)
+            else:
+                img = cv2.flip(img, 0)
+            if len(anno) > 1:
+                anno = int(anno[0])
+        info = [occ, hos, anno]
+        return img, info
+        
+        
     def __getitem__(self, index):
-
+        
         try:
             info = self.lines[index].strip().split(' ')
             img  = cv2.resize(cv2.imread(info[0]), (self.in_size, self.in_size))
@@ -68,8 +93,8 @@ class AkuDataset(data.Dataset):
                     break        
         
         if len(anno) == 2:
-            img  = cv2.flip(img, 1)
-            anno = anno[0]
+            img, res = self._flip_aug(img, info[-3:], 'flip')
+            occ, hos, anno = res
             
         if self.transforms is not None:
             img = self.transforms(img)
